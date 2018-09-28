@@ -2,10 +2,11 @@
 use File::Copy;
 use File::Find;
 use Digest::MD5 qw(md5_hex);
-use File::Slurp;
+# use File::Slurp;
 
 use constant DIR => ".legit";
 use constant INDEX => ".legit/index/";
+use constant TEMP_INDEX => ".legit/temp_index/";
 use constant REPO => ".legit/repository/";
 use constant LOG => ".legit/log";
 use constant TEMP => ".legit/temp";
@@ -56,18 +57,18 @@ sub status() {
     $lastCommit = _getLastCommit();
     $lastDir = REPO.$lastCommit."/";
 
-    opendir my $dir, $lastDir or die "Cannot open directory: $!";
+    opendir my $dir, $lastDir or die "Cannot open directory: $!\n";
     my @repo = grep(/^[a-zA-Z0-9]{1,}[\.\-\_]{0,}/, readdir $dir);
     closedir $dir;
     @repo = sort @repo;
 
-    opendir $dir, INDEX or die "Cannot open directory: $!";
+    opendir $dir, INDEX or die "Cannot open directory: $!\n";
     my @index = grep(/^[a-zA-Z0-9]{1,}[\.\-\_]{0,}/, readdir $dir);
     closedir $dir;
     @index = sort @index;
 
 
-    opendir $dir, "." or die "Cannot open directory: $!";
+    opendir $dir, "." or die "Cannot open directory: $!\n";
     my @work = grep(/^[a-zA-Z0-9]{1,}[\.\-\_]{0,}/,readdir $dir);
     closedir $dir;
     @work = sort @work;
@@ -125,7 +126,7 @@ sub status() {
 
 sub init {
     if (-d DIR) {
-        die "legit.pl: error .legit already exists\n";
+        die "legit.pl: error: .legit already exists\n";
     } else {    
         mkdir DIR;
         print "Initialized empty legit repository in ",DIR,"\n";
@@ -134,7 +135,7 @@ sub init {
 
 sub add {
     if (! -d DIR) {
-        die "legit.pl: error .legit not exists\n";
+        die "legit.pl: error: no .legit directory containing legit repository exists\n";
     }
 
     if (! -d INDEX) {
@@ -143,6 +144,9 @@ sub add {
 
     @files = @_;
     foreach $file(@files){
+        if (! -e $file) {
+            die "legit.pl: error: can not open '$file'\n";
+        }
         if ($file =~ /^[a-zA-Z0-9]{1,}[\.\-\_]{0,}/) {
             copy($file,INDEX.$file);
         }
@@ -255,7 +259,7 @@ sub commit {
 
     }
 
-    print "Committed as commit as $dirnum\n"
+    print "Committed as commit $dirnum\n"
 }
 
 sub myLog {
@@ -278,11 +282,17 @@ sub show {
     }
 
     if (! -d $dir) {
-        die "directory not exists";
+        die "legit.pl: error: unknown commit '$commit'\n";
     }
 
     if (! -e $dir.$filename) {
-        die "file not exists";
+        if ($commit ne '') {
+            die "legit.pl: error: '$filename' not found in commit $commit\n";
+
+        } else {
+            die "legit.pl: error: '$filename' not found in index\n";
+            
+        }
     }
 
     open FL ,"<", $dir.$filename;
@@ -290,7 +300,7 @@ sub show {
         print $_;
     }
     close FL;
-    print "\n";
+    # print "\n";
 }
 
 sub _getLastCommit {
@@ -310,7 +320,24 @@ sub _getLastCommit {
 
 sub _isSameFiles {
     my ($file_1, $file_2) = @_;
-    if (md5_hex(read_file($file_1)) eq md5_hex(read_file($file_2))) {
+    my $hash_1 = Digest::MD5->new;
+    my $hash_2 = Digest::MD5->new;
+
+    open FL , "<",$file_1;
+    foreach $line (<FL>) {
+        $hash_1->add($line);
+    }
+    close FL;
+
+    open FL , "<",$file_2;
+    foreach $line (<FL>) {
+        $hash_2->add($line);
+    }
+    close FL;
+
+
+    # if (md5_hex(read_file($file_1)) eq md5_hex(read_file($file_2))) {
+    if ($hash_1->hexdigest eq $hash_2->hexdigest ) {
         return 1;
     } else {
         return 0;
