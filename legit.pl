@@ -53,7 +53,74 @@ if ($cmd eq "add") {
 }
 
 sub status() {
-    
+    $lastCommit = _getLastCommit();
+    $lastDir = REPO.$lastCommit."/";
+
+    opendir my $dir, $lastDir or die "Cannot open directory: $!";
+    my @repo = grep(/^[a-zA-Z0-9]{1,}[\.\-\_]{0,}/, readdir $dir);
+    closedir $dir;
+    @repo = sort @repo;
+
+    opendir $dir, INDEX or die "Cannot open directory: $!";
+    my @index = grep(/^[a-zA-Z0-9]{1,}[\.\-\_]{0,}/, readdir $dir);
+    closedir $dir;
+    @index = sort @index;
+
+
+    opendir $dir, "." or die "Cannot open directory: $!";
+    my @work = grep(/^[a-zA-Z0-9]{1,}[\.\-\_]{0,}/,readdir $dir);
+    closedir $dir;
+    @work = sort @work;
+
+    my %union = ();
+    foreach(@repo){
+        $union{$_}+=1;
+    }
+    foreach(@index){
+        $union{$_}+=2;
+    }
+    foreach(@work){
+        $union{$_}+=4;
+    }
+
+    foreach $key (sort keys %union) {
+        print "$key - ";
+        if($union{$key} == 1 ) {
+            print "deleted";
+        } elsif($union{$key} == 2 || $union{$key} == 3 ) {
+            print "file deleted";
+        } elsif ($union{$key} == 4){
+            print "untracked";
+        } elsif ($union{$key} == 5) {
+            #two-way compare
+            if (_isSameFiles($key,$lastDir.$key)) {
+                print "same as repo";
+            } else {
+                print "file changed, changes not staged for commit";
+            }
+
+        } elsif ($union{$key} == 6) {
+            print "added to index";
+        } elsif ($union{$key} == 7) {
+            #three-way compare
+            if (_isSameFiles($key,$lastDir.$key)) {
+                print "same as repo";
+            } else {
+                print "file changed, ";
+                if (! _isSameFiles($key,INDEX.$key) && ! _isSameFiles($lastDir.$key,INDEX.$key) ) {
+                    print "different changes staged for commit";
+                } elsif ( _isSameFiles($key,INDEX.$key) && ! _isSameFiles($lastDir.$key,INDEX.$key)) {
+                    print "changes staged for commit";
+                } else {
+                    print "changes not staged for commit";
+                }
+            }
+        } else {
+            print "$union{$key}";
+        }
+        print "\n";
+        
+    }
 }
 
 sub init {
