@@ -1,0 +1,1 @@
+2018-09-28 09:10 13:16 | coding | setup git, subset 0 (init, add ,commit, show, log), subset 1( commit -a)
