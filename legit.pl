@@ -13,7 +13,7 @@ sub branch;
 sub checkout;
 sub commit;
 sub init;
-sub log;
+sub myLog;
 sub merge;
 sub rm;
 sub show;
@@ -34,13 +34,13 @@ if ($cmd eq "add") {
 } elsif ($cmd eq "init") {
     init();
 } elsif ($cmd eq "log") {
-
+    myLog();
 } elsif ($cmd eq "merge") {
 
 } elsif ($cmd eq "rm") {
 
 } elsif ($cmd eq "show") {
-
+    show($ARGV[1]);
 } elsif ($cmd eq "status") {
 
 } else {
@@ -76,7 +76,6 @@ sub add {
 
 sub commit {
     if ( grep $_ eq "-a", @_ ) {
-
         opendir my $dir, INDEX;
         while (my $thing = readdir $dir) {
             if ($thing eq '.' or $thing eq '..') {
@@ -133,4 +132,39 @@ sub commit {
     }
 
     print "Committed as commit as $dirnum\n"
+}
+
+sub myLog {
+    open FL ,"<", LOG;
+    while (<FL>) {
+        print $_;
+    }
+    close FL;
+}
+
+sub show {
+
+    my ($commit,$filename) = split /\:/,shift;
+    # print "$commit\n$filename\n";
+    
+    if ($commit ne '') {
+        $dir = REPO.$commit.'/';
+    } else {
+        $dir = INDEX;
+    }
+
+    if (! -d $dir) {
+        die "directory not exists";
+    }
+
+    if (! -e $dir.$filename) {
+        die "file not exists";
+    }
+
+    open FL ,"<", $dir.$filename;
+    while (<FL>) {
+        print $_;
+    }
+    close FL;
+    print "\n";
 }
