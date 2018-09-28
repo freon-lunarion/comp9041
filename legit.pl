@@ -1,8 +1,12 @@
 #!/usr/bin/perl -w
 use File::Copy;
+use File::Find;
 
 use constant DIR => ".legit";
 use constant INDEX => ".legit/index/";
+use constant REPO => ".legit/repository/";
+use constant LOG => ".legit/log";
+use constant TEMP => ".legit/temp";
 
 sub add;
 sub branch;
@@ -26,7 +30,7 @@ if ($cmd eq "add") {
 } elsif ($cmd eq "checkout") {
 
 } elsif ($cmd eq "commit") {
-
+    commit(@ls);
 } elsif ($cmd eq "init") {
     init();
 } elsif ($cmd eq "log") {
@@ -68,4 +72,65 @@ sub add {
             copy($file,INDEX.$file);
         }
     }
+}
+
+sub commit {
+    if ( grep $_ eq "-a", @_ ) {
+
+        opendir my $dir, INDEX;
+        while (my $thing = readdir $dir) {
+            if ($thing eq '.' or $thing eq '..') {
+                next;
+            }
+            add($thing);
+        }
+        closedir $dir;
+    }
+    if (! -d REPO) {
+        mkdir REPO;
+    } 
+
+    $dirnum = -1;
+    find(
+    sub {
+        -d && $dirnum++;
+        # print $FILE::Find::name, "\n";
+    },
+    REPO);
+    # print $dirnum,"\n";
+    mkdir REPO.$dirnum;
+
+    opendir my $dir, INDEX;
+        while (my $thing = readdir $dir) {
+            if ($thing eq '.' or $thing eq '..') {
+                next;
+            }
+            copy(INDEX.$thing,REPO.$dirnum."/".$thing);
+        }
+    closedir $dir;
+
+    $msg = pop @_;
+    
+    # print $msg,"\n";
+
+    if (-e LOG ) {
+        open my $new, ">", TEMP;
+        open my $old, "<", LOG;
+        print $new  "$dirnum $msg\n";
+        while (<$old>){
+            print $new $_;
+        }
+        # close $old;
+        close $new;
+
+        unlink LOG;
+        rename TEMP, LOG;
+    } else {
+        open my $new, ">", LOG;
+        print $new  "$dirnum $msg\n";
+        close $new;
+
+    }
+
+    print "Committed as commit as $dirnum\n"
 }
