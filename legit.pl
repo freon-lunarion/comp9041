@@ -6,7 +6,7 @@ use Digest::MD5 qw(md5_hex);
 
 use constant DIR => ".legit";
 use constant INDEX => ".legit/index/";
-use constant TEMP_INDEX => ".legit/temp_index/";
+use constant TEMP_INDEX => ".legit/old_index";
 use constant REPO => ".legit/repository/";
 use constant LOG => ".legit/log";
 use constant TEMP => ".legit/temp";
@@ -197,6 +197,7 @@ sub rm {
 
 sub commit {
     if ( grep $_ eq "-a", @_ ) {
+        # move(TEMP_INDEX,INDEX);
         opendir my $dir, INDEX;
         while (my $thing = readdir $dir) {
             if ($thing eq '.' or $thing eq '..') {
@@ -206,6 +207,12 @@ sub commit {
         }
         closedir $dir;
     }
+    if (! -d INDEX) {
+        die "nothing to commit \n";
+    } 
+
+
+
     if (! -d REPO) {
         mkdir REPO;
     } 
@@ -218,10 +225,54 @@ sub commit {
     );
 
     if ($filenum <= 0) {
-        die "no file to commit";
+        die "nothing to commit\n";
     }
 
-    $dirnum = _getLastCommit();
+    $lastCommit = _getLastCommit();
+    if ($lastCommit >= 0) {
+        $lastDir = REPO.$lastCommit."/";
+
+        opendir my $dir, $lastDir or die "Cannot open directory: $!\n";
+        my @repo = grep(/^[a-zA-Z0-9]{1,}[\.\-\_]{0,}/, readdir $dir);
+        closedir $dir;
+        @repo = sort @repo;
+
+        opendir $dir, INDEX or die "Cannot open directory: $!\n";
+        my @index = grep(/^[a-zA-Z0-9]{1,}[\.\-\_]{0,}/, readdir $dir);
+        closedir $dir;
+        @index = sort @index;
+
+        my %union = ();
+        my $allSame = 1;
+        foreach(@repo){
+            $union{$_}+=1;
+        }
+        foreach(@index){
+            $union{$_}+=2;
+        }
+
+        foreach $key (sort keys %union) {
+            if ($union{$key} == 2) {
+                $allSame = 0;
+                last;
+            } elsif ($union{$key} == 3) {
+                if (!_isSameFiles($key,$lastDir.$key)) {
+                    $allSame = 0;
+                    last;
+                }
+            }
+        }
+
+        if ($allSame == 1) {
+            die "nothing to commit\n";
+        }
+        # my %index=map{$_ =>1} @index;
+        # my %repo=map{$_=>1} @repo;
+        # my @intersect = grep( $simpsindeons{$_}, @repo );
+    }
+    
+
+    $dirnum = $lastCommit;
     if ($dirnum < 0) {
         $dirnum = 0;
     } else {
@@ -230,7 +281,7 @@ sub commit {
     
     mkdir REPO.$dirnum;
 
-    opendir my $dir, INDEX;
+    opendir $dir, INDEX;
     while (my $thing = readdir $dir) {
         if ($thing eq '.' or $thing eq '..') {
             next;
@@ -256,8 +307,9 @@ sub commit {
         open my $new, ">", LOG;
         print $new  "$dirnum $msg\n";
         close $new;
-
     }
+
+    # move(INDEX,TEMP_INDEX);
 
     print "Committed as commit $dirnum\n"
 }
