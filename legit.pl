@@ -52,6 +52,9 @@ if ($cmd eq "add") {
 
 }
 
+sub status() {
+    
+}
 
 sub init {
     if (-d DIR) {
