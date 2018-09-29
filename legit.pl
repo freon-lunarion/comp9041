@@ -94,11 +94,13 @@ sub status() {
             print "untracked";
         } elsif ($union{$key} == 5) {
             #two-way compare
-            if (_isSameFiles($key,$lastDir.$key)) {
-                print "same as repo";
-            } else {
-                print "file changed, changes not staged for commit";
-            }
+            # if (_isSameFiles($key,$lastDir.$key)) {
+            #     print "same as repo";
+            # } else {
+            #     print "file changed, changes not staged for commit";
+            # }
+            print "untracked";
+
 
         } elsif ($union{$key} == 6) {
             print "added to index";
@@ -179,40 +181,76 @@ sub rm {
     }
 
     # print "$isForce, $isCurDir\n";
+    foreach $file (keys %files) {
+        if (-e $file) {
+            $files{$file} += 1
+        }
+
+        if (-e INDEX.$file) {
+            $files{$file} += 2
+        }
+
+        if (-e $dirCommit.$file) {
+            $files{$file} += 4
+        }
+    }
+
     
     if ($isForce == 0) {
         foreach $file (keys %files) {
             # print "$file\n";
-            
-            # if (-e $dirCommit.$file) {
-                if (! _isSameFiles($file, $dirCommit.$file) ){
-                    $files{$file} +=1;
-                }
 
-                if (! _isSameFiles(INDEX.$file, $dirCommit.$file) ){
-                    $files{$file} +=2;
-                }
-            # } 
-            
-
-            if (! _isSameFiles(INDEX.$file, $file) ){
-                $files{$file} +=4;
-            }
-
-            # print "$file $files{$file} \n";
-            if (! -e INDEX.$file) {
-                die "legit.pl: error: '$file' is not in the legit repository\n";
-            }
-            
             if ($files{$file} == 1) {
-                die "legit.pl: error: '$file' in repository is different to working file\n";
+                die "legit.pl: error: '$file' is not in the legit repository\n"
+
+            } elsif ($files{$file} == 2) {
+                #nothing
+                
+            } elsif ($files{$file} == 3) {
+                
+                if (! _isSameFiles(INDEX.$file, $file) || $isCurDir == 1) {
+                    die "legit.pl: error: '$file' has changes staged in the index\n";
+                } 
             } elsif ($files{$file} == 4) {
-                die "legit.pl: error: '$file' has changes staged in the index\n";
-            } elsif ($files{$file} == 7) {
-                die "legit.pl: error: '$file' in index is different to both working file and repository\n";
+                #nothing
+            } elsif ($files{$file} == 5) {
+                #working & last repo
+                if (! _isSameFiles($file, $dirCommit.$file) ){
+                    die "legit.pl: error: '$file' in repository is different to working file\n";
+                }
+            } elsif ($files{$file} == 6) {
+                #index & last repo
+
+            } elsif ($files{$file} == 7 && $isCurDir == 1) {
+                #three way
+                if (! _isSameFiles($file, $dirCommit.$file) && ! _isSameFiles(INDEX.$file, $dirCommit.$file)  && ! _isSameFiles(INDEX.$file, $file)){
+                    die "legit.pl: error: '$file' in index is different to both working file and repository\n";
+                } elsif (! _isSameFiles($file, $dirCommit.$file) && _isSameFiles(INDEX.$file, $dirCommit.$file)) {
+                    die "legit.pl: error: '$file' in repository is different to working file\n";
+
+                } elsif (! _isSameFiles(INDEX.$file, $dirCommit.$file) ){
+                    die "legit.pl: error: '$file' has changes staged in the index\n";
+                }
+
+            } elsif ($files{$file} == 7 && $isCurDir == 0) {
+                #two way
+                if ( ! _isSameFiles(INDEX.$file, $dirCommit.$file)  && ! _isSameFiles(INDEX.$file, $file)){
+                    die "legit.pl: error: '$file' in index is different to both working file and repository\n";
+                } 
+
             }
         }
-    } 
+    } else {
+        foreach $file (keys %files) {
+            if ($files{$file} == 1) {
+                die "legit.pl: error: '$file' is not in the legit repository\n"
+
+            } elsif ($files{$file} == 5) {
+                die "legit.pl: error: '$file' is not in the legit repository\n"
+
+            }
+        }
+    }
 
     foreach $file (keys %files) {
         # print "$file\n";

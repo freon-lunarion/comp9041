@@ -2,3 +2,4 @@
 2018-09-28 15:00 20:39 | coding | subset 1 (rm, status)
 2018-09-28 20:39 22:33 | debuging | subset 0 (7/8 passed)
 2018-09-29 06:13 09:00 | debuging | subset0 (8/8 passed)
+2018-09-29 10:00 14:18 | debuging | subset1 (9/9 passed)
