@@ -144,8 +144,11 @@ sub add {
 
     @files = @_;
     foreach $file(@files){
-        if (! -e $file) {
+
+        if (! -e $file && ! -e INDEX.$file) {
             die "legit.pl: error: can not open '$file'\n";
+        } elsif (! -e $file && -e INDEX.$file) {
+            unlink INDEX.$file;
         }
         if ($file =~ /^[a-zA-Z0-9]{1,}[\.\-\_]{0,}/) {
             copy($file,INDEX.$file);
@@ -158,40 +161,66 @@ sub rm {
     my $isCurDir = 0;
     my $isForce = 0;
     my $lastCommit = _getLastCommit();
+    my %files;
+    $dirCommit = REPO.$lastCommit."/";
 
     if ( grep $_ eq "--force", @ls ) {
         $isForce = 1;
     }
 
-    if (! grep $_ eq "--cache", @ls ) {
+    if (! grep $_ eq "--cached", @ls ) {
         $isCurDir = 1;
     }
 
-    $dirCommit = REPO.$lastCommit."/";
-    if ($isForce == 0 ){
-        foreach $file (@ls) {
-            if (! _isSameFiles(INDEX.$file, $dirCommit.$file) ){
-                die "index file diffrent from last commit";
-            }
+    foreach $item(@ls){
+        if($item ne "--force" && $item ne "--cached") {
+            $files{$item} = 0;
+        }
+    }
 
-            if ($isCurDir == 1) {
-                if (! _isSameFiles(INDEX.$file, $dirCommit.$file) ){
-                    die "current file diffrent from last commit";
+    # print "$isForce, $isCurDir\n";
+    
+    if ($isForce == 0) {
+        foreach $file (keys %files) {
+            # print "$file\n";
+            
+            # if (-e $dirCommit.$file) {
+                if (! _isSameFiles($file, $dirCommit.$file) ){
+                    $files{$file} +=1;
                 }
+
+                if (! _isSameFiles(INDEX.$file, $dirCommit.$file) ){
+                    $files{$file} +=2;
+                }
+            # } 
+            
+
+            if (! _isSameFiles(INDEX.$file, $file) ){
+                $files{$file} +=4;
+            }
+
+            # print "$file $files{$file} \n";
+            if (! -e INDEX.$file) {
+                die "legit.pl: error: '$file' is not in the legit repository\n";
+            }
+            
+            if ($files{$file} == 1) {
+                die "legit.pl: error: '$file' in repository is different to working file\n";
+            } elsif ($files{$file} == 4) {
+                die "legit.pl: error: '$file' has changes staged in the index\n";
+            } elsif ($files{$file} == 7) {
+                die "legit.pl: error: '$file' in index is different to both working file and repository\n";
             }
         }
+    } 
 
-    }
-
-    foreach $file (@ls) {
-        if ($file ne '--cache' &&  $file ne '--force') {
-            unlink INDEX.$file;
-            if ($isCurDir == 1) {
-                unlink $file; 
-            }
+    foreach $file (keys %files) {
+        # print "$file\n";
+        unlink INDEX.$file;
+        if ($isCurDir == 1) {
+            unlink $file; 
         }
     }
-
 
 }
 
@@ -211,22 +240,9 @@ sub commit {
         die "nothing to commit \n";
     } 
 
-
-
     if (! -d REPO) {
         mkdir REPO;
     } 
-
-    $filenum = -1;
-    find(
-        sub {
-            -e && $filenum++;
-        },INDEX
-    );
-
-    if ($filenum <= 0) {
-        die "nothing to commit\n";
-    }
 
     $lastCommit = _getLastCommit();
     if ($lastCommit >= 0) {
@@ -244,24 +260,39 @@ sub commit {
 
         my %union = ();
         my $allSame = 1;
-        foreach(@repo){
-            $union{$_}+=1;
-        }
-        foreach(@index){
-            $union{$_}+=2;
-        }
 
-        foreach $key (sort keys %union) {
-            if ($union{$key} == 2) {
-                $allSame = 0;
-                last;
-            } elsif ($union{$key} == 3) {
-                if (!_isSameFiles($key,$lastDir.$key)) {
+        my $repo_size = @repo;
+        my $index_size = @index;
+
+        if ( $repo_size != $index_size) {
+            $allSame = 0;
+
+        } else {
+            foreach(@repo){
+                $union{$_}+=1;
+            }
+            foreach(@index){
+                $union{$_}+=2;
+            }
+
+            foreach $key (sort keys %union) {
+                # print "$key, $union{$key}\n";
+                if($union{$key} == 1) {
                     $allSame = 0;
                     last;
+                }elsif ($union{$key} == 2) {
+                    $allSame = 0;
+                    last;
+                } elsif ($union{$key} == 3) {
+                    if (-e $key && !_isSameFiles($key,$lastDir.$key)) {
+                        $allSame = 0;
+                        last;
+                    }
                 }
             }
         }
+
+        
 
         if ($allSame == 1) {
             die "nothing to commit\n";
@@ -375,13 +406,19 @@ sub _isSameFiles {
     my $hash_1 = Digest::MD5->new;
     my $hash_2 = Digest::MD5->new;
 
-    open FL , "<",$file_1;
+    if (! -e $file_1 && ! -e $file_2 ) {
+        return 1;
+    } elsif (! -e $file_1 || ! -e $file_2 ) {
+        return 0;
+    }
+
+    open FL , "<",$file_1 or die "Can't open '$file_1': $!\n";
     foreach $line (<FL>) {
         $hash_1->add($line);
     }
     close FL;
 
-    open FL , "<",$file_2;
+    open FL , "<",$file_2 or die "Can't open '$file_2': $!\n";
     foreach $line (<FL>) {
         $hash_2->add($line);
     }
