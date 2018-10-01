@@ -8,11 +8,15 @@ use constant DIR => ".legit";
 use constant INDEX => ".legit/index/";
 use constant TEMP_INDEX => ".legit/old_index";
 use constant REPO => ".legit/repository/";
-use constant LOG => ".legit/log";
+
 use constant TEMP => ".legit/temp";
+
+use constant BRANCH_LS => ".legit/branch.ls";
+use constant BRANCH_CUR => ".legit/branch.cur";
 
 sub _getLastCommit;
 sub _isSameFiles;
+sub _get_cur_branch;
 
 sub add;
 sub branch;
@@ -32,14 +36,14 @@ $cmd = shift @ls;
 if ($cmd eq "add") {
     add (@ls);
 } elsif ($cmd eq "branch") {
-
+    branch(@ls);
 } elsif ($cmd eq "checkout") {
 
 } elsif ($cmd eq "commit") {
     commit(@ls);
 } elsif ($cmd eq "init") {
     init();
-} elsif ($cmd eq "log") {
+} elsif ($cmd eq "$log") {
     myLog();
 } elsif ($cmd eq "merge") {
 
@@ -53,7 +57,62 @@ if ($cmd eq "add") {
 
 }
 
-sub status() {
+sub branch {
+    @ls = @_;
+    my $isDel = 0;
+    my $branch_name ='';
+    if ( grep $_ eq "-d", @ls ) {
+        $isDel = 1;
+    }
+
+    for $cmd (@ls) {
+        if ($cmd ne "-d") {
+            $branch_name = $cmd;
+        }
+    }
+    $cur = _get_cur_branch();
+    if ($isDel == 0 && $branch_name eq''){
+        
+        # @list = glob(DIR."/*.log");
+        # print(@list);
+
+        
+
+        opendir(D, DIR);
+        @files = grep { /\.log$/ } readdir(D);
+        closedir(D);
+        
+        foreach $file(@files) {
+            @temp = split /\./, $file;
+            print $temp[0];
+            if ($temp[0] eq $cur) {
+                print " *";
+            }
+            print "\n";
+        }
+
+    } elsif ($branch_name ne '' && $isDel == 0) {
+        
+        copy(DIR."/".$cur.".log",DIR."/".$branch_name.".log");
+
+    } elsif ($branch_name ne'' && $isDel == 1) {
+
+        unlink DIR."/".$branch_name.".log";
+        
+    }
+
+}
+
+sub _get_cur_branch {
+    #get current branch
+    open my $file, '<', BRANCH_CUR; 
+    my $cur = <$file>;
+    close $file;
+    chomp $cur;
+    return $cur;
+}
+
+sub status {
     $lastCommit = _getLastCommit();
     $lastDir = REPO.$lastCommit."/";
 
@@ -133,6 +192,22 @@ sub init {
         mkdir DIR;
         print "Initialized empty legit repository in ",DIR,"\n";
     }
+
+    #create master.$log
+
+    open FL, ">", DIR."/master.log";
+    print FL '';
+    close FL;
+
+    # open FL, ">", BRANCH_LS;
+    # print FL "master\n";
+    # close FL;
+    
+    #create branch.cur
+    open FL, ">", BRANCH_CUR;
+    print FL "master\n";
+    close FL;
+
 }
 
 sub add {
@@ -330,8 +405,6 @@ sub commit {
             }
         }
 
-        
-
         if ($allSame == 1) {
             die "nothing to commit\n";
         }
@@ -359,10 +432,13 @@ sub commit {
     }
     closedir $dir;
 
+    $branch = _get_cur_branch();
+    
+    $log = DIR.$branch.".log";
     $msg = pop @_;
-    if (-e LOG ) {
+    if (-e $log ) {
         open my $new, ">", TEMP;
-        open my $old, "<", LOG;
+        open my $old, "<", $log;
         print $new  "$dirnum $msg\n";
         while (<$old>){
             print $new $_;
@@ -370,10 +446,10 @@ sub commit {
         # close $old;
         close $new;
 
-        unlink LOG;
-        rename TEMP, LOG;
+        unlink $log;
+        rename TEMP, $log;
     } else {
-        open my $new, ">", LOG;
+        open my $new, ">", $log;
         print $new  "$dirnum $msg\n";
         close $new;
     }
@@ -384,7 +460,10 @@ sub commit {
 }
 
 sub myLog {
-    open FL ,"<", LOG;
+    $branch = _get_cur_branch();
+    $log = DIR.$branch.".log";
+
+    open FL ,"<", $log;
     while (<FL>) {
         print $_;
     }
