@@ -112,22 +112,22 @@ sub merge {
     
     my $common = _get_common_ancestor($cur_branch,$branch);
 
-    opendir my $dir, "." or die "Cannot open directory: $!\n";
+    opendir my $dir, "." or die "Cannot open directory1: $!\n";
     my @work = grep(/^[a-zA-Z0-9]{1,}[\.\-\_]{0,}/, readdir $dir);
     closedir $dir;
     @work = sort @work;
 
-    opendir $dir, REPO."$common" or die "Cannot open directory: $!\n";
+    opendir $dir, REPO."$common" or die "Cannot open directory2: $!\n";
     my @common = grep(/^[a-zA-Z0-9]{1,}[\.\-\_]{0,}/, readdir $dir);
     closedir $dir;
     @common = sort @common;
-
-    opendir $dir, REPO."$lastCommit_0" or die "Cannot open directory: $!\n";
+    # print("=====", REPO."$lastCommit_0\n");
+    opendir $dir, REPO."$lastCommit_0" or die "Cannot open directory3: $!\n";
     my @b_0 = grep(/^[a-zA-Z0-9]{1,}[\.\-\_]{0,}/, readdir $dir);
     closedir $dir;
     @b_0 = sort @b_0;
 
-    opendir $dir, REPO."$lastCommit_1" or die "Cannot open directory: $!\n";
+    opendir $dir, REPO."$lastCommit_1" or die "Cannot open directory4: $!\n";
     my @b_1 = grep(/^[a-zA-Z0-9]{1,}[\.\-\_]{0,}/, readdir $dir);
     closedir $dir;
     @b_1 = sort @b_1;
@@ -298,6 +298,22 @@ sub branch {
         if (! -e DIR."/$branch_name.log") {
             die "legit.pl: error: branch '$branch_name' does not exist\n";
         }
+        
+
+        opendir $dir, INDEX;
+        while (my $thing = readdir $dir) {
+            if ($thing eq '.' or $thing eq '..' or $thing eq 'legit.pl'or $thing eq 'diary.txt' or $thing =~ /^\./) {
+                next;
+            }
+
+            if (!-e $thing) {
+                die "legit.pl: error: branch '$branch_name' has unmerged changes\n";
+            }
+        }
+        closedir $dir;
+        
+
+        
 
         unlink DIR."/".$branch_name.".log";
         print "Deleted branch '$branch_name'\n";
@@ -833,11 +849,11 @@ sub _getLastCommit2 {
 
 sub _getLastCommit3 {
     my $branch = shift;
-    my $cur ='';
+    my $cur = '';
 
     open my $file, '<', DIR."/$branch.log" ;
 
-    $cur = <$file>;
+    $cur = readfile $file;
     close $file;
     
     if (!$cur ) {
