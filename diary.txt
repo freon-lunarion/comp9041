@@ -3,3 +3,8 @@
 2018-09-28 20:39 22:33 | debuging | subset 0 (7/8 passed)
 2018-09-29 06:13 09:00 | debuging | subset0 (8/8 passed)
 2018-09-29 10:00 14:18 | debuging | subset1 (9/9 passed)
+2018-09-29 18:00 20:00 | coding | subset2 
+2018-10-02 09:00 14:00 | coding | subset2
+2018-10-02 16:00 18:00 | coding | test script
+2018-10-02 18:00 21:00 | debuging | subset2
+2018-10-03 20:00 23:00 | debuging | subset2

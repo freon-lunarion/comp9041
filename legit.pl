@@ -2,6 +2,7 @@
 use File::Copy;
 use File::Find;
 use Digest::MD5 qw(md5_hex);
+
 # use File::Slurp;
 
 use constant DIR => ".legit";
@@ -11,7 +12,6 @@ use constant REPO => ".legit/repository/";
 
 use constant TEMP => ".legit/temp";
 
-use constant BRANCH_LS => ".legit/branch.ls";
 use constant BRANCH_CUR => ".legit/branch.cur";
 
 sub _getLastCommit;
@@ -38,15 +38,15 @@ if ($cmd eq "add") {
 } elsif ($cmd eq "branch") {
     branch(@ls);
 } elsif ($cmd eq "checkout") {
-
+    checkout(@ls);
 } elsif ($cmd eq "commit") {
     commit(@ls);
 } elsif ($cmd eq "init") {
     init();
-} elsif ($cmd eq "$log") {
+} elsif ($cmd eq "log") {
     myLog();
 } elsif ($cmd eq "merge") {
-
+    merge(@ls);
 } elsif ($cmd eq "rm") {
     rm(@ls);
 } elsif ($cmd eq "show") {
@@ -55,6 +55,193 @@ if ($cmd eq "add") {
     status();
 } else {
 
+}
+
+sub _merge_files{
+    my ($file_base, $file_a, $file_b) = @_;
+    open my $handle, '<', $file_base;
+    chomp(my @base = <$handle>);
+    close $handle;
+
+    open $handle, '<', $file_a;
+    chomp(my @a = <$handle>);
+    close $handle;
+
+    open $handle, '<', $file_b;
+    chomp(my @b = <$handle>);
+    close $handle;
+
+    my @result = ();
+    my $counter = 0;
+    while (@base) {
+        if ($a[$counter] eq $b[$counter]) {
+            push @result, $b[$counter];
+        } elsif ($a[$counter] eq $base[$counter]) {
+            push @result, $b[$counter];
+        } elsif ($b[$counter] eq $base[$counter]) {
+            push @result, $a[$counter];
+        } else {
+            push @result, $base[$counter];
+        }
+    }
+
+    return @result;
+}
+
+sub _get_common_ancestor {
+    my ($branch_0, $branch_1) = @_;
+    
+    open FL, "<", DIR."/branch.ls";
+    while (<FL>) {
+        @words = split / /, $_;
+        
+        if ($words[0] eq $branch_0 && $words[1] eq $branch_1) {
+            close FL;
+            return $words[2];
+        } 
+    }
+    close FL;
+}
+
+sub merge {
+    my ($branch, $m, $msg) = @_;
+    my $cur_branch = _get_cur_branch();
+    
+    my $lastCommit_0 = _getLastCommit3($cur_branch);
+    my $lastCommit_1 = _getLastCommit3($branch);
+    
+    my $common = _get_common_ancestor($cur_branch,$branch);
+
+    opendir my $dir, "." or die "Cannot open directory: $!\n";
+    my @work = grep(/^[a-zA-Z0-9]{1,}[\.\-\_]{0,}/, readdir $dir);
+    closedir $dir;
+    @work = sort @work;
+
+    opendir $dir, REPO."$common" or die "Cannot open directory: $!\n";
+    my @common = grep(/^[a-zA-Z0-9]{1,}[\.\-\_]{0,}/, readdir $dir);
+    closedir $dir;
+    @common = sort @common;
+
+    opendir $dir, REPO."$lastCommit_0" or die "Cannot open directory: $!\n";
+    my @b_0 = grep(/^[a-zA-Z0-9]{1,}[\.\-\_]{0,}/, readdir $dir);
+    closedir $dir;
+    @b_0 = sort @b_0;
+
+    opendir $dir, REPO."$lastCommit_1" or die "Cannot open directory: $!\n";
+    my @b_1 = grep(/^[a-zA-Z0-9]{1,}[\.\-\_]{0,}/, readdir $dir);
+    closedir $dir;
+    @b_1 = sort @b_1;
+
+    my %union = ();
+
+    foreach(@work){
+        $union{$_}+=1;
+    }
+
+    foreach(@common){
+        $union{$_}+=2;
+    }
+
+    foreach(@b_0){
+        $union{$_}+=4;
+    }
+
+    foreach(@b_0){
+        $union{$_}+=8;
+    }
+
+    foreach $key (sort keys %union) {
+        if ($union{$key} == 1) {
+            
+            unlink($key);
+        } elsif ($union{$key} == 2) {
+            # do nothing
+            
+        } elsif ($union{$key} == 3) {
+            unlink($key);           
+            
+        } elsif ($union{$key} == 4) {
+            copy(REPO."$lastCommit_0/$key", $key);
+
+            
+        } elsif ($union{$key} == 5) {
+            unlink($key);
+            copy(REPO."$lastCommit_0/$key", $key);           
+
+        } elsif ($union{$key} == 6) {
+            copy(REPO."$lastCommit_0/$key", $key);    
+            
+        } elsif ($union{$key} == 7) {
+            unlink($key);    
+            copy(REPO."$lastCommit_0/$key", $key);           
+            
+        } elsif ($union{$key} == 8) {
+            copy(REPO."$lastCommit_1/$key", $key);
+            
+        } elsif ($union{$key} == 9) {
+            unlink($key);  
+            copy(REPO."$lastCommit_1/$key", $key);
+            
+        } elsif ($union{$key} == 10) {
+            copy(REPO."$lastCommit_1/$key", $key);
+            
+        } elsif ($union{$key} == 11) {
+            unlink($key);
+            copy(REPO."$lastCommit_1/$key", $key);
+
+        } elsif ($union{$key} == 12) {
+            if (_isSameFiles(REPO."$lastCommit_0/$key",REPO."$lastCommit_1/$key")) {
+                copy(REPO."$lastCommit_1/$key", $key);
+            } else {
+
+            }
+            
+        } elsif ($union{$key} == 13) {
+            unlink($key); 
+            if (_isSameFiles(REPO."$lastCommit_0/$key",REPO."$lastCommit_1/$key")) {
+                copy(REPO."$lastCommit_1/$key", $key);
+            } else {
+
+            } 
+
+            
+        } elsif ($union{$key} == 14) {
+            if (_isSameFiles(REPO."$lastCommit_0/$key",REPO."$lastCommit_1/$key")) {
+                copy(REPO."$lastCommit_1/$key", $key);
+            } else {
+                # compare with common
+                if (_isSameFiles(REPO."$common/$key",REPO."$lastCommit_1/$key")) {
+                    copy(REPO."$lastCommit_0/$key", $key);
+                } elsif (_isSameFiles(REPO."$common/$key",REPO."$lastCommit_0/$key")) {
+                    copy(REPO."$lastCommit_1/$key", $key);
+                } else {
+                    @output = _merge_files(REPO."$common/$key",REPO."$lastCommit_0/$key",REPO."$lastCommit_1/$key");
+                    open FL, ">", $key;
+                    foreach $line(@output) {
+                        print FL "$line\n";
+                    }
+                    close FL;
+                }
+            }
+            
+        } elsif ($union{$key} == 15) {
+            unlink($key); 
+            if (_isSameFiles(REPO."$lastCommit_0/$key",REPO."$lastCommit_1/$key")) {
+                copy(REPO."$lastCommit_1/$key", $key);
+            } else {
+                # compare with common
+                if (_isSameFiles(REPO."$common/$key",REPO."$lastCommit_1/$key")) {
+                    copy(REPO."$lastCommit_0/$key", $key);
+                } elsif (_isSameFiles(REPO."$common/$key",REPO."$lastCommit_0/$key")) {
+                    copy(REPO."$lastCommit_1/$key", $key);
+                } else {
+                    
+                }
+            }
+            
+        }
+    }
+    
 }
 
 sub branch {
@@ -72,44 +259,155 @@ sub branch {
     }
     $cur = _get_cur_branch();
     if ($isDel == 0 && $branch_name eq''){
-        
-        # @list = glob(DIR."/*.log");
-        # print(@list);
 
+        $last = _getLastCommit();
+        if ($last == -1) {
+            die "legit.pl: error: your repository does not have any commits yet\n";
+        }
         
-
         opendir(D, DIR);
         @files = grep { /\.log$/ } readdir(D);
         closedir(D);
         
-        foreach $file(@files) {
+        foreach $file(sort @files) {
             @temp = split /\./, $file;
             print $temp[0];
-            if ($temp[0] eq $cur) {
-                print " *";
-            }
+            # if ($temp[0] eq $cur) {
+            #     print " *";
+            # }
             print "\n";
         }
 
     } elsif ($branch_name ne '' && $isDel == 0) {
-        
+        if ( -e DIR."/$branch_name.log") {
+            die "legit.pl: error: branch '$branch_name' already exists\n";
+        }
+        $common = _getLastCommit();
+        open FL, ">>", DIR."/branch.ls";
+        print FL "$cur $branch_name $common";
+        close FL;
+
         copy(DIR."/".$cur.".log",DIR."/".$branch_name.".log");
 
     } elsif ($branch_name ne'' && $isDel == 1) {
+        
+        if ($branch_name eq 'master'){
+            die "legit.pl: error: can not delete branch 'master'\n";
+        }
+        
+        if (! -e DIR."/$branch_name.log") {
+            die "legit.pl: error: branch '$branch_name' does not exist\n";
+        }
 
         unlink DIR."/".$branch_name.".log";
+        print "Deleted branch '$branch_name'\n";
         
     }
 
 }
 
-sub _get_cur_branch {
-    #get current branch
-    open my $file, '<', BRANCH_CUR; 
-    my $cur = <$file>;
-    close $file;
-    chomp $cur;
-    return $cur;
+sub checkout {
+    my $branch = shift;
+    $cur = _get_cur_branch();
+
+    if ($cur eq $branch) {
+
+    }
+    $other = _getLastCommit();
+
+    # print $branch;
+    if (! -e DIR."/$branch.log") {
+        die "legit.pl: error: unknown branch '$branch'\n";
+    }
+
+    open FL , ">" ,BRANCH_CUR;
+    print FL  $branch;
+    close FL;
+
+    # # to do load the last commit into the working dir
+
+    print "Switched to branch '$branch'\n";
+    $last = _getLastCommit();
+    if ($last >=0){
+        $indexDir = INDEX;
+        $commitDir = REPO."$last/";
+        $otherDir = REPO."$other/";
+        $workDir = ".";
+        %files = ();
+
+        opendir $dir, $workDir;
+        while (my $thing = readdir $dir) {
+            if ($thing eq '.' or $thing eq '..' or $thing eq 'legit.pl'or $thing eq 'diary.txt' or $thing =~ /^\./) {
+                next;
+            }
+
+            $files{$thing} += 1;
+        }
+        closedir $dir;
+
+        opendir $dir, $indexDir;
+        while (my $thing = readdir $dir) {
+            if ($thing eq '.' or $thing eq '..' or $thing eq 'legit.pl'or $thing eq 'diary.txt' or $thing =~ /^\./) {
+                next;
+            }
+
+            $files{$thing} += 2;
+        }
+        closedir $dir;
+
+        opendir $dir, $commitDir;
+        while (my $thing = readdir $dir) {
+            if ($thing eq '.' or $thing eq '..' or $thing eq 'legit.pl'or $thing eq 'diary.txt' or $thing =~ /^\./) {
+                next;
+            }
+
+            $files{$thing} += 4;
+        }
+        closedir $dir;
+
+        foreach $file (keys %files) {
+            if ($files{$file} == 1) {
+                # unlink($file);
+            } elsif ($files{$file} == 2) {
+                # copy($indexDir.$file, $file);
+
+            } elsif ($files{$file} == 3) {
+                unlink($file);
+                # copy($indexDir.$file, $file);
+                
+            } elsif ($files{$file} == 4) {
+                copy($commitDir.$file, $file);
+
+            } elsif ($files{$file} == 5) {
+                copy($commitDir.$file, $file);
+                
+            } elsif ($files{$file} == 6) {
+                copy($commitDir.$file, $file);
+                
+            } elsif ($files{$file} == 7) {
+                if (!_isSameFiles($commitDir.$file, $file) && !_isSameFiles($indexDir.$file, $file) && _isSameFiles($indexDir.$file, $commitDir.$file) ) {
+                    if (!_isSameFiles($commitDir.$file,$otherDir.$file)) {
+                        copy($commitDir.$file, $file);
+
+                    }
+
+                } elsif (!_isSameFiles($commitDir.$file, $file) && _isSameFiles($indexDir.$file, $file) && ! _isSameFiles($indexDir.$file, $commitDir.$file) ) {
+                    if (!_isSameFiles($commitDir.$file,$otherDir.$file)) {
+                        copy($commitDir.$file, $file);
+
+                    }
+
+                } else {
+                    copy($commitDir.$file, $file);
+                }
+
+                
+                
+            }
+        }
+
+        
+    }
 }
 
 sub status {
@@ -125,7 +423,6 @@ sub status {
     my @index = grep(/^[a-zA-Z0-9]{1,}[\.\-\_]{0,}/, readdir $dir);
     closedir $dir;
     @index = sort @index;
-
 
     opendir $dir, "." or die "Cannot open directory: $!\n";
     my @work = grep(/^[a-zA-Z0-9]{1,}[\.\-\_]{0,}/,readdir $dir);
@@ -153,13 +450,7 @@ sub status {
             print "untracked";
         } elsif ($union{$key} == 5) {
             #two-way compare
-            # if (_isSameFiles($key,$lastDir.$key)) {
-            #     print "same as repo";
-            # } else {
-            #     print "file changed, changes not staged for commit";
-            # }
             print "untracked";
-
 
         } elsif ($union{$key} == 6) {
             print "added to index";
@@ -272,7 +563,7 @@ sub rm {
 
     
     if ($isForce == 0) {
-        foreach $file (keys %files) {
+        foreach $file (sort keys %files) {
             # print "$file\n";
 
             if ($files{$file} == 1) {
@@ -357,7 +648,7 @@ sub commit {
         mkdir REPO;
     } 
 
-    $lastCommit = _getLastCommit();
+    $lastCommit = _getLastCommit2();
     if ($lastCommit >= 0) {
         $lastDir = REPO.$lastCommit."/";
 
@@ -434,7 +725,7 @@ sub commit {
 
     $branch = _get_cur_branch();
     
-    $log = DIR.$branch.".log";
+    $log = DIR."/$branch.log";
     $msg = pop @_;
     if (-e $log ) {
         open my $new, ">", TEMP;
@@ -461,7 +752,7 @@ sub commit {
 
 sub myLog {
     $branch = _get_cur_branch();
-    $log = DIR.$branch.".log";
+    $log = DIR."/$branch.log";
 
     open FL ,"<", $log;
     while (<FL>) {
@@ -504,6 +795,27 @@ sub show {
 }
 
 sub _getLastCommit {
+    my $branch = _get_cur_branch();
+    my $cur ='';
+    # return $dirnum;
+    open my $file, '<', DIR."/$branch.log" ;
+
+    $cur = <$file>;
+    close $file;
+    
+    if (!$cur ) {
+        return -1;
+    }
+    chomp $cur;
+    @words = split / /, $cur;
+    if ($words[0] ne '') {
+        return $words[0];
+    } else {
+        return -1;
+    }
+}
+
+sub _getLastCommit2 {
     $dirnum = -2;
     if (-d REPO) {
         find(
@@ -515,7 +827,29 @@ sub _getLastCommit {
     }
     
 
-    return $dirnum;
+    return $dirnum;  
+    
+}
+
+sub _getLastCommit3 {
+    my $branch = shift;
+    my $cur ='';
+
+    open my $file, '<', DIR."/$branch.log" ;
+
+    $cur = <$file>;
+    close $file;
+    
+    if (!$cur ) {
+        return -1;
+    }
+    chomp $cur;
+    @words = split / /, $cur;
+    if ($words[0] ne '') {
+        return $words[0];
+    } else {
+        return -1;
+    }
 }
 
 sub _isSameFiles {
@@ -548,4 +882,13 @@ sub _isSameFiles {
     } else {
         return 0;
     }
+}
+
+sub _get_cur_branch {
+    #get current branch
+    open my $file, '<', BRANCH_CUR; 
+    my $cur = <$file>;
+    close $file;
+    chomp $cur;
+    return $cur;
 }
